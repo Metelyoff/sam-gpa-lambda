@@ -24,16 +24,20 @@ public class GPAHandler implements RequestHandler<S3Event, String> {
 
     private static final Region REGION = Region.EU_CENTRAL_1;
 
+    private S3Client s3Client;
+
     private LambdaLogger logger;
 
     @Override
     public String handleRequest(S3Event s3event, Context context) {
         logger = context.getLogger();
 
-        final S3Client s3Client = S3Client.builder()
-                .httpClientBuilder(ApacheHttpClient.builder())
-                .region(REGION)
-                .build();
+        if (s3Client == null) {
+            s3Client = S3Client.builder()
+                    .httpClientBuilder(ApacheHttpClient.builder())
+                    .region(REGION)
+                    .build();
+        }
 
         List<S3EventNotification.S3EventNotificationRecord> records = s3event.getRecords();
 
