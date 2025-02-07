@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Function which calculates average of GPA from the S3 bucket and sends result to the SNS.
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 512
+    LoggingConfig:
+      LogFormat: JSON
+
+Resources:
+
+  # Create the Lambda function
+  GPALambda:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerTag: java21-maven-v1
+      DockerContext: ./gpa-lambda
+      Dockerfile: Dockerfile
+    Properties:
+      PackageType: Image
+      Architectures:
+        - arm64
+      EphemeralStorage:
+        Size: 512
+      RecursiveLoop: Terminate
+      SnapStart:
+        ApplyOn: None
+      Tags:
+        rd_aws_course: ''
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref GPASNSTopic
+      EventInvokeConfig:
+        MaximumEventAgeInSeconds: 21600
+        MaximumRetryAttempts: 2
+        DestinationConfig:
+          OnSuccess:
+            Destination:
+              Ref: GPASNSTopic
+            Type: SNS
+      Events:
+        S3ObjectCreated:
+          Type: S3
+          Properties:
+            Bucket: !Ref GPAS3Bucket
+            Events:
+              - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: input
+                  - Name: suffix
+                    Value: .txt
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+            - Effect: Allow
+              Action:
+                - s3:Get*
+                - s3-object-lambda:Get*
+              Resource: !Sub "arn:aws:s3:::gpa-sam-s3-bucket/*"
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref GPASNSTopic
+
+  # Create the S3 bucket
+  GPAS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: gpa-sam-s3-bucket
+      VersioningConfiguration:
+        Status: Enabled
+
+  # Adding permission to execute lambda
+  GPAS3BucketPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt GPALambda.Arn
+      Principal: s3.amazonaws.com
+      Action: lambda:InvokeFunction
+      SourceArn: !GetAtt GPAS3Bucket.Arn
+      SourceAccount: !Sub "${AWS::AccountId}"
+
+  # Create the SNS Topic
+  GPASNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: gpa-sam-sns-topic
+
+  # Create the SQS queue
+  GPAQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: gpa-sqs-queue
+
+  # Create topic subscription
+  GPAQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: sqs
+      TopicArn: !Ref GPASNSTopic
+      Endpoint: !GetAtt GPAQueue.Arn
+
+  # Configure queue policy
+  GPAQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref GPAQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "sqs:SendMessage"
+            Resource: !GetAtt GPAQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref GPASNSTopic
+
+Outputs:
+
+  GPAS3BucketArn:
+    Description: The S3 bucket for GPA files
+    Value: !Ref GPAS3Bucket
+
+  GPASNSTopicArn:
+    Description: The SNS topic for GPA Lambda notifications
+    Value: !Ref GPASNSTopic
+
+  GPALambdaArn:
+    Description: GPALambda Function ARN
+    Value: !GetAtt GPALambda.Arn
+
+  GPAQueueArn:
+    Description: The ARN of the SQS queue subscribed to the SNS topic
+    Value: !GetAtt GPAQueue.Arn
+
+  GPAQueueUrl:
+    Description: The URL of the SQS queue
+    Value: !Ref GPAQueue

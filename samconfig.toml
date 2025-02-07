@@ -1,0 +1,9 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "sam-app"
+resolve_s3 = true
+s3_prefix = "sam-app"
+region = "eu-central-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+image_repositories = ["GPALambda=195275653332.dkr.ecr.eu-central-1.amazonaws.com/samapp7427b055/gpalambda48c64d8drepo"]
