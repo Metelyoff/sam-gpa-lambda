@@ -23,16 +23,17 @@ import java.util.List;
 public class GPAHandler implements RequestHandler<S3Event, String> {
 
     private static final Region REGION = Region.EU_CENTRAL_1;
-    private final S3Client s3Client = S3Client.builder()
-            .httpClientBuilder(ApacheHttpClient.builder())
-            .region(REGION)
-            .build();
 
     private LambdaLogger logger;
 
     @Override
     public String handleRequest(S3Event s3event, Context context) {
         logger = context.getLogger();
+
+        final S3Client s3Client = S3Client.builder()
+                .httpClientBuilder(ApacheHttpClient.builder())
+                .region(REGION)
+                .build();
 
         List<S3EventNotification.S3EventNotificationRecord> records = s3event.getRecords();
 
@@ -44,7 +45,7 @@ public class GPAHandler implements RequestHandler<S3Event, String> {
             String srcKey = records.getFirst().getS3().getObject().getUrlDecodedKey();
             logger.log("Key: " + srcKey);
 
-            List<Data> data = convertData(getData(srcBucket, srcKey), ',', true);
+            List<Data> data = convertData(getData(s3Client, srcBucket, srcKey), ',', true);
             logger.log("Data size: " + data.size());
 
             double averageGpa = averageGpa(data);
@@ -57,7 +58,7 @@ public class GPAHandler implements RequestHandler<S3Event, String> {
         return result;
     }
 
-    public InputStream getData(String bucketName, String keyName) {
+    public InputStream getData(S3Client s3Client, String bucketName, String keyName) {
         GetObjectRequest objectRequest = createGetObjectRequest(bucketName, keyName);
         try {
             return s3Client.getObject(objectRequest);

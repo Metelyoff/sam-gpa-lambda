@@ -6,7 +6,7 @@ Description: >
 Globals:
   Function:
     Timeout: 10
-    MemorySize: 512
+    MemorySize: 1024
     LoggingConfig:
       LogFormat: JSON
 
@@ -26,8 +26,8 @@ Resources:
       EphemeralStorage:
         Size: 512
       RecursiveLoop: Terminate
-      SnapStart:
-        ApplyOn: None
+#      SnapStart:
+#        ApplyOn: PublishedVersions
       Tags:
         rd_aws_course: ''
       Environment:
@@ -72,6 +72,13 @@ Resources:
               Action:
                 - sns:Publish
               Resource: !Ref GPASNSTopic
+
+  # Use the lambda snap start versioning
+#  GPALambdaVersion:
+#    Type: AWS::Lambda::Version
+#    Properties:
+#      FunctionName: !Ref GPALambda
+#      Description: Version for GPALambda with SnapStart enabled
 
   # Create the S3 bucket
   GPAS3Bucket:
